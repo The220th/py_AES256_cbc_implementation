@@ -11,7 +11,7 @@ from AES_256_CBC import AES256CBC
 
 key  = b'Super secret keySuper secret key' # 32 bytes (256 bits)
 iv   = b'randoom init str' # 16 bytes
-text = b'the end is never2' # must be: len(text) % 16 == 0
+text = b'the end is never' # must be: len(text) % 16 == 0
 aes = AES256CBC()
 
 # Encrypt:
