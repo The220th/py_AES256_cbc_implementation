@@ -348,9 +348,9 @@ class AES256CBC():
         self.__ShiftRow(state, 3, 3)
 
     def __InvShiftRows(self, state: "list of bytearray") -> None:
-        self.__ShiftRow(state, 1, Nb - 1)
-        self.__ShiftRow(state, 2, Nb - 2)
-        self.__ShiftRow(state, 3, Nb - 3)
+        self.__ShiftRow(state, 1, self.Nb - 1)
+        self.__ShiftRow(state, 2, self.Nb - 2)
+        self.__ShiftRow(state, 3, self.Nb - 3)
 
     def __XorBlocks(self, a: bytes, b: bytes, c: bytearray, leng: int):
         for i in range(leng):
@@ -362,7 +362,7 @@ class AES256CBC():
             dest[i] = src[i]
 
     # return ptr
-    def __memset(ptr: bytearray, value: int, num: int) -> bytearray:
+    def __memset(self, ptr: bytearray, value: int, num: int) -> bytearray:
         for i in range(num):
             ptr[i] = value
 
@@ -377,9 +377,9 @@ class AES256CBC():
         return res
 
     def EncryptCBC(self, en: bytes, enLen: int, key: bytes, iv: bytes) -> bytes:
+        self.__CheckLength(enLen)
         out = bytearray(b'\x00')*len(en)
         out_view = memoryview(out)
-        self.__CheckLength(enLen)
         block = bytearray(b'\x00')*self.blockBytesLen
         roundKeys = bytearray(b'\x00')*(4*self.Nb*(self.Nr+1))
         self.__KeyExpansion(key, roundKeys)
@@ -416,79 +416,44 @@ class AES256CBC():
             for j in range(self.Nb):
                 out[i + 4*j] = state[i][j]
 
-# public
-# unsigned char *AES256CBC::DecryptCBC(const unsigned char in[], unsigned char *out, unsigned int inLen,
-#                                const unsigned char key[],
-#                                const unsigned char *iv)
-# {
-#   CheckLength(inLen);
-#   //unsigned char *out = new unsigned char[inLen];
-#   unsigned char *block = new unsigned char[blockBytesLen];
-#   unsigned char *roundKeys = new unsigned char[4 * Nb * (Nr + 1)];
-#   KeyExpansion(key, roundKeys);
-#   memcpy(block, iv, blockBytesLen);
-#   for (unsigned int i = 0; i < inLen; i += blockBytesLen) {
-#     DecryptBlock(in + i, out + i, roundKeys);
-#     XorBlocks(block, out + i, out + i, blockBytesLen);
-#     memcpy(block, in + i, blockBytesLen);
-#   }
+    def DecryptCBC(self, de: bytes, deLen: int, key: bytes, iv: bytes) -> bytes:
+        self.__CheckLength(deLen)
+        out = bytearray(b'\x00')*len(de)
+        out_view = memoryview(out)
+        block = bytearray(b'\x00')*self.blockBytesLen
+        roundKeys = bytearray(b'\x00')*(4*self.Nb*(self.Nr+1))
+        self.__KeyExpansion(key, roundKeys)
+        self.__memcpy(block, iv, self.blockBytesLen)
+        for i in range(0, deLen, self.blockBytesLen):
+            self.__DecryptBlock(de[i:], out_view[i:], roundKeys) # de is const, so ok. Not need memoryview
+            self.__XorBlocks(block, out_view[i:], out_view[i:], self.blockBytesLen) 
+            self.__memcpy(block, de[i:], self.blockBytesLen)
+        
+        return bytes(out)
 
-#   delete[] block;
-#   delete[] roundKeys;
+    def __DecryptBlock(self, de: bytes, out: memoryview, roundKeys: bytearray) -> None:
+        state = [None for i in range(4)]
+        state_buff = bytearray(b'\x00')*(4 * self.Nb)
+        state[0] = memoryview(state_buff)
+        for i in range(4):
+            state[i] = state[0][self.Nb*i:]
+        
+        for i in range(4):
+            for j in range(self.Nb):
+                state[i][j] = de[i + 4*j]
+        
+        self.__AddRoundKey(state, roundKeys[self.Nr*4*self.Nb:])
 
-#   return out;
-# }
+        for round_i in range(self.Nr-1, 0, -1):
+            self.__InvSubBytes(state)
+            self.__InvShiftRows(state)
+            self.__AddRoundKey(state, roundKeys[round_i*4*self.Nb:])
+            self.__InvMixColumns(state)
+        
+        self.__InvSubBytes(state)
+        self.__InvShiftRows(state)
+        self.__AddRoundKey(state, roundKeys)
 
-
-
-
-# void AES256CBC::DecryptBlock(const unsigned char in[], unsigned char out[],
-#                        unsigned char *roundKeys) {
-#   unsigned char **state = new unsigned char *[4];
-#   state[0] = new unsigned char[4 * Nb];
-#   int i, j, round;
-#   for (i = 0; i < 4; i++) {
-#     state[i] = state[0] + Nb * i;
-#   }
-
-#   for (i = 0; i < 4; i++) {
-#     for (j = 0; j < Nb; j++) {
-#       state[i][j] = in[i + 4 * j];
-#     }
-#   }
-
-#   AddRoundKey(state, roundKeys + Nr * 4 * Nb);
-
-#   for (round = Nr - 1; round >= 1; round--) {
-#     InvSubBytes(state);
-#     InvShiftRows(state);
-#     AddRoundKey(state, roundKeys + round * 4 * Nb);
-#     InvMixColumns(state);
-#   }
-
-#   InvSubBytes(state);
-#   InvShiftRows(state);
-#   AddRoundKey(state, roundKeys);
-
-#   for (i = 0; i < 4; i++) {
-#     for (j = 0; j < Nb; j++) {
-#       out[i + 4 * j] = state[i][j];
-#     }
-#   }
-
-#   delete[] state[0];
-#   delete[] state;
-# }
-
-
-
-
-
-
-
-
-
-
-
-
-
+        for i in range(4):
+            for j in range(self.Nb):
+                out[i + 4*j] = state[i][j]
