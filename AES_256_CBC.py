@@ -238,14 +238,14 @@ INV_CMDS = (
 class AES256CBC():
 
     def __init__(self):
-        self.Nb = 4
-        self.Nk = 8
-        self.Nr = 14
-        self.blockBytesLen = 4 * self.Nb * 1 # where 1 = sizeof(unsigned char) = sizeof(byte)
+        self.__Nb = 4
+        self.__Nk = 8
+        self.__Nr = 14
+        self.__blockBytesLen = 4 * self.__Nb * 1 # where 1 = sizeof(unsigned char) = sizeof(byte)
 
     def __CheckLength(self, leng: int) -> None:
-        if(leng % self.blockBytesLen != 0):
-            raise RuntimeError(f"Plaintext length must be divisible by {blockBytesLen}")
+        if(leng % self.__blockBytesLen != 0):
+            raise RuntimeError(f"Plaintext length must be divisible by {self.__blockBytesLen}")
 
     def __xtime(self, b: int) -> int:
         return (b << 1) ^ (((b >> 7) & 1) * 0x1b)
@@ -272,44 +272,44 @@ class AES256CBC():
         temp = bytearray(b'\x00')*4
         rcon = bytearray(b'\x00')*4
         i = 0
-        while(i < 4*self.Nk):
+        while(i < 4*self.__Nk):
             w[i] = key[i]
             i+=1
-        i = 4*self.Nk
-        buff = 4 * self.Nb * (self.Nr + 1)
+        i = 4*self.__Nk
+        buff = 4 * self.__Nb * (self.__Nr + 1)
         while(i < buff):
             temp[0] = w[i-4+0]
             temp[1] = w[i-4+1]
             temp[2] = w[i-4+2]
             temp[3] = w[i-4+3]
-            if(i // 4 % self.Nk == 0):
+            if(i // 4 % self.__Nk == 0):
                 self.__RotWord(temp)
                 self.__SubWord(temp)
-                self.__Rcon(rcon, i // (self.Nk*4))
+                self.__Rcon(rcon, i // (self.__Nk*4))
                 self.__XorWords(temp, rcon, temp)
-            elif(self.Nk > 6 and i // 4 % self.Nk == 4):
+            elif(self.__Nk > 6 and i // 4 % self.__Nk == 4):
                 self.__SubWord(temp)
-            w[i + 0] = w[i - 4 * self.Nk] ^ temp[0]
-            w[i + 1] = w[i + 1 - 4 * self.Nk] ^ temp[1]
-            w[i + 2] = w[i + 2 - 4 * self.Nk] ^ temp[2]
-            w[i + 3] = w[i + 3 - 4 * self.Nk] ^ temp[3]
+            w[i + 0] = w[i - 4 * self.__Nk] ^ temp[0]
+            w[i + 1] = w[i + 1 - 4 * self.__Nk] ^ temp[1]
+            w[i + 2] = w[i + 2 - 4 * self.__Nk] ^ temp[2]
+            w[i + 3] = w[i + 3 - 4 * self.__Nk] ^ temp[3]
             i += 4
     
     def __SubBytes(self, state: "list of bytearray") -> None:
         for i in range(4):
-            for j in range(self.Nb):
+            for j in range(self.__Nb):
                 t = state[i][j]
                 state[i][j] = sbox[t // 16][t % 16]
 
     def __InvSubBytes(self, state: "list of bytearray") -> None:
         for i in range(4):
-            for j in range(self.Nb):
+            for j in range(self.__Nb):
                 t = state[i][j]
                 state[i][j] = inv_sbox[t // 16][t % 16]
 
     def __AddRoundKey(self, state: "list of bytearray", key: bytearray) -> None:
         for i in range(4):
-            for j in range(self.Nb):
+            for j in range(self.__Nb):
                 state[i][j] = state[i][j] ^ key[i + 4*j]
 
     def __MixColumns(self, state: "list of bytearray") -> None:
@@ -337,10 +337,10 @@ class AES256CBC():
             self.__memcpy(state[i], temp_state[i], 4)
 
     def __ShiftRow(self, state: "list of bytearray", i: int, n: int) -> None:
-        tmp = bytearray(b'\x00')*self.Nb
-        for j in range(self.Nb):
-            tmp[j] = state[i][(j + n) % self.Nb]
-        self.__memcpy(state[i], tmp, self.Nb * 1) # where 1 = sizeof(unsigned char) = sizeof(byte)
+        tmp = bytearray(b'\x00')*self.__Nb
+        for j in range(self.__Nb):
+            tmp[j] = state[i][(j + n) % self.__Nb]
+        self.__memcpy(state[i], tmp, self.__Nb * 1) # where 1 = sizeof(unsigned char) = sizeof(byte)
 
     def __ShiftRows(self, state: "list of bytearray") -> None:
         self.__ShiftRow(state, 1, 1)
@@ -348,9 +348,9 @@ class AES256CBC():
         self.__ShiftRow(state, 3, 3)
 
     def __InvShiftRows(self, state: "list of bytearray") -> None:
-        self.__ShiftRow(state, 1, self.Nb - 1)
-        self.__ShiftRow(state, 2, self.Nb - 2)
-        self.__ShiftRow(state, 3, self.Nb - 3)
+        self.__ShiftRow(state, 1, self.__Nb - 1)
+        self.__ShiftRow(state, 2, self.__Nb - 2)
+        self.__ShiftRow(state, 3, self.__Nb - 3)
 
     def __XorBlocks(self, a: bytes, b: bytes, c: bytearray, leng: int):
         for i in range(leng):
@@ -366,88 +366,107 @@ class AES256CBC():
         for i in range(num):
             ptr[i] = value
 
-    def printHexArray(self, a: bytes, n: int) -> None:
+    def printHexArray(self, a: bytes) -> None:
+        n = len(a)
         for i in range(n):
             print("%02x " % (a[i]), end="")
+        print("")
 
-    def printHexArray_str(self, a: bytes, n: int) -> None:
+    def printHexArray_str(self, a: bytes) -> None:
+        n = len(a)
         res = ""
         for i in range(n):
             res += "%02x " % (a[i])
         return res
 
-    def EncryptCBC(self, en: bytes, enLen: int, key: bytes, iv: bytes) -> bytes:
+    def EncryptCBC(self, en: bytes, key: bytes, iv: bytes) -> bytes:
+        '''
+            len(en)%16 == 0        ~ len(en) must be a multiple of self.__blockBytesLen = 16 bytes
+            len(key) == 32         ~ len(key) must be 32 bytes (256 bits)
+            len(iv) == 16          ~ len(iv) must be self.__blockBytesLen = 16 bytes
+
+            len(return) == len(de) ~ len of return will be equal len(de)
+        '''
+        enLen = len(en)
         self.__CheckLength(enLen)
         out = bytearray(b'\x00')*len(en)
         out_view = memoryview(out)
-        block = bytearray(b'\x00')*self.blockBytesLen
-        roundKeys = bytearray(b'\x00')*(4*self.Nb*(self.Nr+1))
+        block = bytearray(b'\x00')*self.__blockBytesLen
+        roundKeys = bytearray(b'\x00')*(4*self.__Nb*(self.__Nr+1))
         self.__KeyExpansion(key, roundKeys)
-        self.__memcpy(block, iv, self.blockBytesLen)
-        for i in range(0, enLen, self.blockBytesLen):
-            self.__XorBlocks(block, en[i:], block, self.blockBytesLen) # en is const, so ok. Not need memoryview
+        self.__memcpy(block, iv, self.__blockBytesLen)
+        for i in range(0, enLen, self.__blockBytesLen):
+            self.__XorBlocks(block, en[i:], block, self.__blockBytesLen) # en is const, so ok. Not need memoryview
             self.__EncryptBlock(block, out_view[i:], roundKeys)
-            self.__memcpy(block, out_view[i:], self.blockBytesLen)
+            self.__memcpy(block, out_view[i:], self.__blockBytesLen)
         
         return bytes(out)
 
     def __EncryptBlock(self, en: bytes, out: memoryview, roundKeys: bytearray) -> None:
         state = [None for i in range(4)]
-        state_buff = bytearray(b'\x00')*(4 * self.Nb)
+        state_buff = bytearray(b'\x00')*(4 * self.__Nb)
         state[0] = memoryview(state_buff)
         for i in range(4):
-            state[i] = state[0][self.Nb*i:]
+            state[i] = state[0][self.__Nb*i:]
 
         for i in range(4):
-            for j in range(self.Nb):
+            for j in range(self.__Nb):
                 state[i][j] = en[i + 4*j]
         
         self.__AddRoundKey(state, roundKeys)
-        for round_i in range(1, self.Nr):
+        for round_i in range(1, self.__Nr):
             self.__SubBytes(state)
             self.__ShiftRows(state)
             self.__MixColumns(state)
-            self.__AddRoundKey(state, roundKeys[round_i*4*self.Nb:])
+            self.__AddRoundKey(state, roundKeys[round_i*4*self.__Nb:])
         self.__SubBytes(state)
         self.__ShiftRows(state)
-        self.__AddRoundKey(state, roundKeys[self.Nr*4*self.Nb:])
+        self.__AddRoundKey(state, roundKeys[self.__Nr*4*self.__Nb:])
 
         for i in range(4):
-            for j in range(self.Nb):
+            for j in range(self.__Nb):
                 out[i + 4*j] = state[i][j]
 
-    def DecryptCBC(self, de: bytes, deLen: int, key: bytes, iv: bytes) -> bytes:
+    def DecryptCBC(self, de: bytes, key: bytes, iv: bytes) -> bytes:
+        '''
+            len(de)%16 == 0        ~ len(de) must be a multiple of self.__blockBytesLen = 16 bytes
+            len(key) == 32         ~ len(key) must be 32 bytes (256 bits)
+            len(iv) == 16          ~ len(iv) must be self.__blockBytesLen = 16 bytes
+
+            len(return) == len(de) ~ len of return will be equal len(de)
+        '''
+        deLen = len(de)
         self.__CheckLength(deLen)
         out = bytearray(b'\x00')*len(de)
         out_view = memoryview(out)
-        block = bytearray(b'\x00')*self.blockBytesLen
-        roundKeys = bytearray(b'\x00')*(4*self.Nb*(self.Nr+1))
+        block = bytearray(b'\x00')*self.__blockBytesLen
+        roundKeys = bytearray(b'\x00')*(4*self.__Nb*(self.__Nr+1))
         self.__KeyExpansion(key, roundKeys)
-        self.__memcpy(block, iv, self.blockBytesLen)
-        for i in range(0, deLen, self.blockBytesLen):
+        self.__memcpy(block, iv, self.__blockBytesLen)
+        for i in range(0, deLen, self.__blockBytesLen):
             self.__DecryptBlock(de[i:], out_view[i:], roundKeys) # de is const, so ok. Not need memoryview
-            self.__XorBlocks(block, out_view[i:], out_view[i:], self.blockBytesLen) 
-            self.__memcpy(block, de[i:], self.blockBytesLen)
+            self.__XorBlocks(block, out_view[i:], out_view[i:], self.__blockBytesLen) 
+            self.__memcpy(block, de[i:], self.__blockBytesLen)
         
         return bytes(out)
 
     def __DecryptBlock(self, de: bytes, out: memoryview, roundKeys: bytearray) -> None:
         state = [None for i in range(4)]
-        state_buff = bytearray(b'\x00')*(4 * self.Nb)
+        state_buff = bytearray(b'\x00')*(4 * self.__Nb)
         state[0] = memoryview(state_buff)
         for i in range(4):
-            state[i] = state[0][self.Nb*i:]
+            state[i] = state[0][self.__Nb*i:]
         
         for i in range(4):
-            for j in range(self.Nb):
+            for j in range(self.__Nb):
                 state[i][j] = de[i + 4*j]
         
-        self.__AddRoundKey(state, roundKeys[self.Nr*4*self.Nb:])
+        self.__AddRoundKey(state, roundKeys[self.__Nr*4*self.__Nb:])
 
-        for round_i in range(self.Nr-1, 0, -1):
+        for round_i in range(self.__Nr-1, 0, -1):
             self.__InvSubBytes(state)
             self.__InvShiftRows(state)
-            self.__AddRoundKey(state, roundKeys[round_i*4*self.Nb:])
+            self.__AddRoundKey(state, roundKeys[round_i*4*self.__Nb:])
             self.__InvMixColumns(state)
         
         self.__InvSubBytes(state)
@@ -455,5 +474,5 @@ class AES256CBC():
         self.__AddRoundKey(state, roundKeys)
 
         for i in range(4):
-            for j in range(self.Nb):
+            for j in range(self.__Nb):
                 out[i + 4*j] = state[i][j]
