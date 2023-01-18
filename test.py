@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from AES_256_CBC import AES256CBC
 import subprocess
 import random
+
+from AES_256_CBC import AES256CBC
+from aes256cipher import AES256CBC_cipher
 
 CPP_EXE_NAME = "./cpp/cpp_aes"
 
@@ -100,5 +102,8 @@ if __name__ == "__main__":
                 print(f"src={en_de}, en={encrypted}, de={decrypted}\n")
                 print(f"en_de={en_de}, key={key}, iv={iv}")
                 exit()
+
+    cipher = AES256CBC_cipher("key")
+    cipher._tests()
 
     print("All is ok")

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # 16x16
 sbox = (
     (0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b,
@@ -245,7 +247,7 @@ class AES256CBC():
 
     def __CheckLength(self, leng: int) -> None:
         if(leng % self.__blockBytesLen != 0):
-            raise RuntimeError(f"Plaintext length must be divisible by {self.__blockBytesLen}")
+            raise ValueError(f"Plaintext length must be divisible by {self.__blockBytesLen}")
 
     def __xtime(self, b: int) -> int:
         return (b << 1) ^ (((b >> 7) & 1) * 0x1b)
