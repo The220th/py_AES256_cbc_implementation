@@ -4,7 +4,7 @@ import subprocess
 import random
 
 from AES_256_CBC import AES256CBC
-from aes256cipher import AES256CBC_cipher
+from kaes256cipher import kaes256CBC
 
 CPP_EXE_NAME = "./cpp/cpp_aes"
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
                 print(f"en_de={en_de}, key={key}, iv={iv}")
                 exit()
 
-    cipher = AES256CBC_cipher("key")
+    cipher = kaes256CBC("key")
     cipher._tests()
 
     print("All is ok")

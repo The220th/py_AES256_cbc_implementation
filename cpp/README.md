@@ -11,5 +11,6 @@ Compile:
 And run:
 
 ``` bash
+> cd ..
 > python test.py
 ```

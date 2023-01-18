@@ -31,37 +31,12 @@ def calc_hash256_str(x: str or bytes) -> str:
     else:
         raise AttributeError(f"Cannot cal hash of {type(x)}: \"{x}\". ")
 
-def get_random_unicode(length):
-    # https://stackoverflow.com/questions/1477294/generate-random-utf-8-string-in-python
-    try:
-        get_char = unichr
-    except NameError:
-        get_char = chr
+def get_random_unicode(lenght):
+    letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
+    S = ''.join(random.choices(letters, k=lenght))
+    return S
 
-    # Update this to include code point ranges to be sampled
-    include_ranges = [
-        ( 0x0021, 0x0021 ),
-        ( 0x0023, 0x0026 ),
-        ( 0x0028, 0x007E ),
-        ( 0x00A1, 0x00AC ),
-        ( 0x00AE, 0x00FF ),
-        ( 0x0100, 0x017F ),
-        ( 0x0180, 0x024F ),
-        ( 0x2C60, 0x2C7F ),
-        ( 0x16A0, 0x16F0 ),
-        ( 0x0370, 0x0377 ),
-        ( 0x037A, 0x037E ),
-        ( 0x0384, 0x038A ),
-        ( 0x038C, 0x038C ),
-    ]
-
-    alphabet = [
-        get_char(code_point) for current_range in include_ranges
-            for code_point in range(current_range[0], current_range[1] + 1)
-    ]
-    return ''.join(random.choice(alphabet) for i in range(length))
-
-class AES256CBC_cipher():
+class kaes256CBC():
 
     def __init__(self, key: str or bytes):
         if(len(key) == 0):
@@ -71,51 +46,22 @@ class AES256CBC_cipher():
         self.__bs = 64        # 16*4. if changed, change __salt and __unsalt, __many_salt and __many_unsalt
         self.__bs_salted = 80 # 16*5. if changed, change __salt and __unsalt, __many_salt and __many_unsalt
         self.__READ_bs_count = 15
+        self.__info_block_size = 16
         self.__aes = AES256CBC()
     
     def encrypt_msg(self, msg: str) -> str:
         de = utf8_to_bytes(msg)
 
-        de_pad = self.__pad(de, self.__bs)
-
-        de_pad_salted = self.__many_salt(de_pad)
-
-        en = self.__aes.EncryptCBC(de_pad_salted, self.__key, self.__iv)
+        en = self._encrypt_bytes(de)
 
         return base64.b64encode(en).decode("ascii")
 
     def decrypt_msg(self, en_msg: str) -> str:
         en = base64.b64decode(en_msg.encode("ascii"))
         
-        de_pad_salted = self.__aes.DecryptCBC(en, self.__key, self.__iv)
-
-        de_pad = self.__many_unsalt(de_pad_salted)
-
-        de = self.__unpad(de_pad)
+        de = self._decrypt_bytes(en)
 
         return bytes_to_utf8(de)
-
-    def _encrypt_bytes(self, x: bytes) -> bytes:
-        de = x
-
-        de_pad = self.__pad(de, self.__bs)
-
-        de_pad_salted = self.__many_salt(de_pad)
-
-        en = self.__aes.EncryptCBC(de_pad_salted, self.__key, self.__iv)
-
-        return en
-
-    def _decrypt_bytes(self, x: bytes) -> bytes:
-        en = x
-        
-        de_pad_salted = self.__aes.DecryptCBC(en, self.__key, self.__iv)
-
-        de_pad = self.__many_unsalt(de_pad_salted)
-
-        de = self.__unpad(de_pad)
-
-        return de
 
     def encrypt_file(self, de_src: str, en_dest: str) -> None:
         if(os.path.isfile(de_src) == False):
@@ -133,10 +79,10 @@ class AES256CBC_cipher():
             while(i < N):
                 buff = fd_in.read(BUFF_SIZE)
                 i += BUFF_SIZE
-                print(f"encrypt_file {de_src}: Readed: {len(buff)} bytes")
+                # print(f"encrypt_file {de_src}: Readed: {len(buff)} bytes")
                 out = self._encrypt_bytes(buff)
                 fd_out.write(out)
-                print(f"encrypt_file {de_src}: Writed: {len(out)} bytes")
+                # print(f"encrypt_file {de_src}: Writed: {len(out)} bytes")
             fd_out.flush()
 
     def decrypt_file(self, en_src: str, de_dest: str) -> None:
@@ -149,22 +95,76 @@ class AES256CBC_cipher():
             ex = RuntimeError(f"File \"{en_src_abs}\" is empty. ")
             print(ex, file=sys.stderr)
             raise ex
-        if(N % self.__bs_salted != 0):
-            ex = RuntimeError(f"File \"{en_src_abs}\" was not encrypted by this cipher. ")
 
-        BUFF_SIZE = self.__READ_bs_count * self.__bs_salted
+        BUFF_SIZE = self.__info_block_size + self.__READ_bs_count * self.__bs_salted
+
+        #if(N % self.__bs_salted != self.__info_block_size):
+        #    ex = RuntimeError(f"File \"{en_src_abs}\" was not encrypted by this cipher. ")
+        #    print(ex, file=sys.stderr)
+        #    raise ex
+
         with open(en_src_abs, "rb") as fd_in, open(de_dest_abs, "wb") as fd_out:
             while(i < N):
                 buff = fd_in.read(BUFF_SIZE)
                 i += BUFF_SIZE
-                print(f"decrypt_file {en_src}: Readed: {len(buff)} bytes")
+                # print(f"decrypt_file {en_src}: Readed: {len(buff)} bytes")
                 out = self._decrypt_bytes(buff)
                 fd_out.write(out)
-                print(f"decrypt_file {en_src}: Writed: {len(out)} bytes")
+                # print(f"decrypt_file {en_src}: Writed: {len(out)} bytes")
             fd_out.flush()
+
+    def _encrypt_bytes(self, x: bytes) -> bytes:
+        de = x
+
+        _hash = calc_hash256(de)[:4]
+        pad = self.__calc_pad(de, self.__bs)
+        info_block = self.__form_info_block(pad, _hash)
+        # print(f"_encrypt_bytes: hash={self.bytes_to_str(_hash)}, pad={pad}")
+
+        de_pad = self.__pad(de, self.__bs)
+
+        de_pad_salted = self.__many_salt(de_pad)
+
+        en = self.__aes.EncryptCBC(info_block + de_pad_salted, self.__key, self.__iv)
+
+        return en
+
+    def _decrypt_bytes(self, x: bytes) -> bytes:
+        en = x
+        
+        de_pad_salted = self.__aes.DecryptCBC(en, self.__key, self.__iv)
+
+        info_block, de_pad_salted = de_pad_salted[:self.__info_block_size], de_pad_salted[self.__info_block_size:]
+        pad, _hash = self.__get_from_info_block(info_block)
+
+        de_pad = self.__many_unsalt(de_pad_salted)
+
+        de = self.__unpad(de_pad, pad)
+
+        de_hash = calc_hash256(de)[:4]
+        # print(f"_decrypt_bytes: hash={self.bytes_to_str(de_hash)}, getted={self.bytes_to_str(_hash)}, getted_pad={pad}")
+        if(de_hash != _hash):
+            ex = RuntimeError(f"Hashes do not match. ")
+            print(ex, file=sys.stderr)
+            raise ex
+
+        return de
 
     def bytes_to_str(self, bs: bytes) -> bytes:
         return self.__aes.printHexArray_str(bs)
+
+    def __form_info_block(self, pad: int, _hash: bytes) -> bytes:
+        info_block = bytearray(random.randbytes(self.__info_block_size))
+        info_block[3] = pad
+        info_block[0], info_block[1], info_block[2], info_block[4] = _hash[0], _hash[1], _hash[2], _hash[3]
+        return bytes(info_block)
+
+    def __get_from_info_block(self, info_block: bytes) -> tuple:
+        """return: (0: pad, 1-5: _hash)"""
+        pad = info_block[3]
+        _hash = bytearray(4)
+        _hash[0], _hash[1], _hash[2], _hash[3] = info_block[0], info_block[1], info_block[2], info_block[4]
+        return (pad, _hash)
 
     def __many_salt(self, x: bytes) -> bytes:
         bs = self.__bs
@@ -250,21 +250,32 @@ class AES256CBC_cipher():
         return bytes(x_salted)
 
     @staticmethod
+    def __calc_pad(x: bytes, bs: int) -> int:
+        count = (bs - len(x) % bs) % bs
+        return count
+
+    @staticmethod
     def __pad(x: bytes, bs: int) -> bytes:
         count = (bs - len(x) % bs) % bs
         shi = count.to_bytes(1, "big")
         return x + shi*count
     
     @staticmethod
-    def __unpad(x: bytes) -> bytes:
-        len_bs = len(x)
-        last = x[len_bs-1] # last is int?
-        #count = int.from_bytes(last, "big")
-        count = last
-        return x[:-count]
+    def __unpad(x: bytes, user_count: int = None) -> bytes:
+        if(user_count == None):
+            len_bs = len(x)
+            last = x[len_bs-1] # last is int?
+            #count = int.from_bytes(last, "big")
+            count = last
+        else:
+            count = user_count
+        if(count == 0):
+            return x
+        else:
+            return x[:-count]
     
     def _tests(self):
-        cipher = AES256CBC_cipher("key")
+        cipher = kaes256CBC("key")
         #for i in range(1000):
         for i in range(0):
             bs = random.randbytes(random.randint(1, 700000))
@@ -316,9 +327,9 @@ class AES256CBC_cipher():
                 print(f"src: {cipher.bytes_to_str(bs)}\nunpad: {cipher.bytes_to_str(bs_unpad)}")
                 exit()
 
-        for i in range(0):
+        for i in range(10):
             key = get_random_unicode(random.randint(1, 300))
-            aes = AES256CBC_cipher(key)
+            aes = kaes256CBC(key)
             for i in range(100):
                 src = get_random_unicode(random.randint(1, 15000))
                 en1 = aes.encrypt_msg(src)
@@ -326,7 +337,7 @@ class AES256CBC_cipher():
                 de1 = aes.decrypt_msg(en1)
                 de2 = aes.decrypt_msg(en2)
 
-                aes2 = AES256CBC_cipher(key)
+                aes2 = kaes256CBC(key)
                 en3 = aes.encrypt_msg(src)
                 de3 = aes.decrypt_msg(en3)
                 if(src != de1 or src != de2 or src != de3):
@@ -335,22 +346,20 @@ class AES256CBC_cipher():
 
         for i in range(10):
             key = get_random_unicode(random.randint(1, 300))
-            aes = AES256CBC_cipher(key)
+            aes = kaes256CBC(key)
             src_path = "src_file"
             en_path1, de_path1 = "en_file1", "de_file1"
             en_path2, de_path2 = "en_file2", "de_file2"
             en_path3, de_path3 = "en_file3", "de_file3"
             for i in range(100):
                 with open(src_path, "wb") as fd:
-                    #fd.write(random.randbytes(random.randint(1, 4096*5)))
-                    fd.write(random.randbytes(random.randint(1, 1000)))
-                print(i)
+                    fd.write(random.randbytes(random.randint(1, 4096*5)))
                 aes.encrypt_file(src_path, en_path1)
                 aes.decrypt_file(en_path1, de_path1)
                 aes.encrypt_file(src_path, en_path2)
                 aes.decrypt_file(en_path2, de_path2)
 
-                aes2 = AES256CBC_cipher(key)
+                aes2 = kaes256CBC(key)
                 en3 = aes.encrypt_file(src_path, en_path3)
                 de3 = aes.decrypt_file(en_path3, de_path3)
                 with open(src_path, "rb") as fd0, open(de_path1, "rb") as fd1, open(de_path2, "rb") as fd2, open(de_path3, "rb") as fd3: 
@@ -363,9 +372,8 @@ class AES256CBC_cipher():
                 
                 os.unlink(src_path), os.unlink(en_path1), os.unlink(de_path1), os.unlink(en_path2), os.unlink(de_path2), os.unlink(en_path3), os.unlink(de_path3)
 
-            
         print("All is ok")
 
 if __name__ == '__main__':
-    cipher = AES256CBC_cipher("key")
+    cipher = kaes256CBC("key")
     cipher._tests()
