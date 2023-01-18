@@ -20,7 +20,7 @@ encrypted_bytes = aes.EncryptCBC(text, key, iv) # b'\xcd;7\x7f\x03\xef:b\x9f`5\x
 # Decrypt:
 decrypted_bytes = aes.DecryptCBC(encrypted_bytes, key, iv) # b'the end is never'
 
-print(text == decrypted_bytes)
+print(text == decrypted_bytes) # True
 ```
 
 # kaes256CBC wrapper usage
@@ -42,8 +42,8 @@ print(encrypted_message1 == encrypted_message2) # False
 import random
 encrypted_message = random.choice([encrypted_message1, encrypted_message2])
 
-decrypted_msg = aes.decrypt_msg(encrypted_message) # Your message. Любой длины. UTF-8 support. 😽
-print(decrypted_msg)
+decrypted_msg = aes.decrypt_msg(encrypted_message) 
+print(decrypted_msg) # Your message. Любой длины. UTF-8 support. 😽
 
 
 
