@@ -321,7 +321,7 @@ class kaes256CBC():
                 print(f"src: {cipher.bytes_to_str(bs)}\nunpad: {cipher.bytes_to_str(bs_unpad)}")
                 exit()
 
-        for i in range(0):
+        for i in range(10):
             key = get_random_unicode(random.randint(1, 300))
             aes = kaes256CBC(key)
             for i in range(100):
