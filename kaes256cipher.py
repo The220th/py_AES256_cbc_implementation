@@ -36,17 +36,21 @@ def get_random_unicode(lenght):
     S = ''.join(random.choices(letters, k=lenght))
     return S
 
+def get_urandom_bytes(n: int):
+    return os.urandom(n)
+    # return random.randbytes(n)
+
 class kaes256CBC():
 
     def __init__(self, key: str or bytes):
         if(len(key) == 0):
             raise ValueError(f"Key is empty: \"{key}\"")
         self.__key = calc_hash256(key)
-        self.__iv = calc_hash256(b'is never the end'+self.__key+b'the end is never')[:16]
         self.__bs = 64        # 16*4. if changed, change __salt and __unsalt, __many_salt and __many_unsalt
         self.__bs_salted = 80 # 16*5. if changed, change __salt and __unsalt, __many_salt and __many_unsalt
         self.__READ_bs_count = 15
         self.__info_block_size = 16
+        self.__iv_size = 16
         self.__aes = AES256CBC()
     
     def encrypt_msg(self, msg: str) -> str:
@@ -96,7 +100,7 @@ class kaes256CBC():
             print(ex, file=sys.stderr)
             raise ex
 
-        BUFF_SIZE = self.__info_block_size + self.__READ_bs_count * self.__bs_salted
+        BUFF_SIZE = self.__iv_size + self.__info_block_size + self.__READ_bs_count * self.__bs_salted
 
         #if(N % self.__bs_salted != self.__info_block_size):
         #    ex = RuntimeError(f"File \"{en_src_abs}\" was not encrypted by this cipher. ")
@@ -116,7 +120,7 @@ class kaes256CBC():
     def _encrypt_bytes(self, x: bytes) -> bytes:
         de = x
 
-        _hash = calc_hash256(de)[:4]
+        _hash = calc_hash256(de)[:12]
         pad = self.__calc_pad(de, self.__bs)
         info_block = self.__form_info_block(pad, _hash)
         # print(f"_encrypt_bytes: hash={self.bytes_to_str(_hash)}, pad={pad}")
@@ -125,14 +129,15 @@ class kaes256CBC():
 
         de_pad_salted = self.__many_salt(de_pad)
 
-        en = self.__aes.EncryptCBC(info_block + de_pad_salted, self.__key, self.__iv)
+        iv = get_urandom_bytes(self.__iv_size)
+        en = self.__aes.EncryptCBC(info_block + de_pad_salted, self.__key, iv)
 
-        return en
+        return iv + en
 
     def _decrypt_bytes(self, x: bytes) -> bytes:
-        en = x
+        iv, en = x[:self.__iv_size], x[self.__iv_size:]
         
-        de_pad_salted = self.__aes.DecryptCBC(en, self.__key, self.__iv)
+        de_pad_salted = self.__aes.DecryptCBC(en, self.__key, iv)
 
         info_block, de_pad_salted = de_pad_salted[:self.__info_block_size], de_pad_salted[self.__info_block_size:]
         pad, _hash = self.__get_from_info_block(info_block)
@@ -141,7 +146,7 @@ class kaes256CBC():
 
         de = self.__unpad(de_pad, pad)
 
-        de_hash = calc_hash256(de)[:4]
+        de_hash = calc_hash256(de)[:12]
         # print(f"_decrypt_bytes: hash={self.bytes_to_str(de_hash)}, getted={self.bytes_to_str(_hash)}, getted_pad={pad}")
         if(de_hash != _hash):
             ex = RuntimeError(f"Hashes do not match. ")
@@ -154,16 +159,20 @@ class kaes256CBC():
         return self.__aes.printHexArray_str(bs)
 
     def __form_info_block(self, pad: int, _hash: bytes) -> bytes:
-        info_block = bytearray(random.randbytes(self.__info_block_size))
+        info_block = bytearray(get_urandom_bytes(self.__info_block_size))
         info_block[3] = pad
-        info_block[0], info_block[1], info_block[2], info_block[4] = _hash[0], _hash[1], _hash[2], _hash[3]
+        info_block[0], info_block[1], info_block[2], info_block[4]    = _hash[0], _hash[1], _hash[2], _hash[3]
+        info_block[5], info_block[6], info_block[7], info_block[8]    = _hash[4], _hash[5], _hash[6], _hash[7]
+        info_block[9], info_block[10], info_block[11], info_block[12] = _hash[8], _hash[9], _hash[10], _hash[11]
         return bytes(info_block)
 
     def __get_from_info_block(self, info_block: bytes) -> tuple:
-        """return: (0: pad, 1-5: _hash)"""
+        """return: (3: pad, 0,1,2,4,5,6,7,8,9,10,11,12: _hash, 13,14,15: not used)"""
         pad = info_block[3]
-        _hash = bytearray(4)
-        _hash[0], _hash[1], _hash[2], _hash[3] = info_block[0], info_block[1], info_block[2], info_block[4]
+        _hash = bytearray(12)
+        _hash[0], _hash[1], _hash[2], _hash[3]   = info_block[0], info_block[1], info_block[2], info_block[4]
+        _hash[4], _hash[5], _hash[6], _hash[7]   = info_block[5], info_block[6], info_block[7], info_block[8]
+        _hash[8], _hash[9], _hash[10], _hash[11] = info_block[9], info_block[10], info_block[11], info_block[12]
         return (pad, _hash)
 
     def __many_salt(self, x: bytes) -> bytes:
@@ -191,8 +200,7 @@ class kaes256CBC():
             raise ex
         bs_salted = self.__bs_salted
         x_salted = bytearray(bs_salted)
-        salt = random.randbytes(16)
-        #salt = calc_hash256(os.urandom(32))[:16]
+        salt = get_urandom_bytes(16)
         j, s = 0, 0
         for i in range(bs_salted):
             if(i % 5 == 0):
@@ -235,20 +243,6 @@ class kaes256CBC():
                 i+=1
         return bytes(x_unsalted)
 
-        bs = self.__bs
-        bs_salted = 80 # 16*5
-        x_salted = bytearray(bs_salted)
-        salt = random.randbytes(16)
-        j, s = 0, 0
-        for i in range(bs_salted):
-            if(i % 5 == 0):
-                x_salted[i] = salt[s]
-                s-=-1
-            else:
-                x_salted[i] = x[j]
-                j+=1
-        return bytes(x_salted)
-
     @staticmethod
     def __calc_pad(x: bytes, bs: int) -> int:
         count = (bs - len(x) % bs) % bs
@@ -278,8 +272,8 @@ class kaes256CBC():
         cipher = kaes256CBC("key")
         #for i in range(1000):
         for i in range(0):
-            bs = random.randbytes(random.randint(1, 700000))
-            #bs = random.randbytes(random.randint(1, 100))
+            bs = get_urandom_bytes(random.randint(1, 700000))
+            #bs = get_urandom_bytes(random.randint(1, 100))
             #bs = b'\x00'*random.randint(0, 17)
             #bs = b'\x01'*random.randint(0, 17)
             #bs = b'\xff'*random.randint(0, 17)
@@ -327,7 +321,7 @@ class kaes256CBC():
                 print(f"src: {cipher.bytes_to_str(bs)}\nunpad: {cipher.bytes_to_str(bs_unpad)}")
                 exit()
 
-        for i in range(10):
+        for i in range(0):
             key = get_random_unicode(random.randint(1, 300))
             aes = kaes256CBC(key)
             for i in range(100):
